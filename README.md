@@ -7,4 +7,6 @@
 No Supabase, abra **SQL Editor → New query**, cole o conteúdo de [`supabase/schema.sql`](supabase/schema.sql) e clique em **Run**.
 O script cria a tabela `despesas`, o bucket privado `comprovantes` e as políticas de acesso (RLS).
 
-Crie o usuário único em **Authentication → Users → Add user** e desative "Allow new users to sign up" em **Authentication → Sign In / Providers**.
+## Acesso sem login
+O sistema abre direto, sem usuário e senha. **Qualquer pessoa com o link do site pode ver, cadastrar e apagar despesas e comprovantes.**
+Para voltar a exigir login, troque `to anon, authenticated` por `to authenticated` em `supabase/schema.sql`, rode o script de novo e restaure a tela de login (`src/pages/Login.tsx` no histórico do git).

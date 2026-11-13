@@ -1,8 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { FilePlus2, List, BarChart3, LogOut } from 'lucide-react'
-import { supabase } from './lib/supabase'
-import Login from './pages/Login'
+import { lazy, Suspense, useState } from 'react'
+import { FilePlus2, List, BarChart3 } from 'lucide-react'
 import NovaDespesa from './pages/NovaDespesa'
 import Lancamentos from './pages/Lancamentos'
 // Dashboard (recharts) carregado sob demanda para reduzir o bundle inicial
@@ -15,25 +12,14 @@ const ABAS = [
 ] as const
 type AbaId = (typeof ABAS)[number]['id']
 
+// Sem login: o sistema abre direto (acesso liberado pelas políticas em supabase/schema.sql)
 export default function App() {
-  const [sessao, setSessao] = useState<Session | null>(null)
-  const [carregando, setCarregando] = useState(true)
   const [aba, setAba] = useState<AbaId>('nova')
-
-  // Observa o estado de autenticação
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { setSessao(data.session); setCarregando(false) })
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSessao(s))
-    return () => sub.subscription.unsubscribe()
-  }, [])
-
-  if (carregando) return null
-  if (!sessao) return <Login />
 
   return (
     <div className="min-h-screen md:pl-24">
       {/* Barra lateral (desktop) */}
-      <aside className="hidden md:flex fixed left-3 top-3 bottom-3 w-[72px] flex-col items-center justify-between rounded-3xl bg-indigo-600 py-6 text-white">
+      <aside className="hidden md:flex fixed left-3 top-3 bottom-3 w-[72px] flex-col items-center rounded-3xl bg-indigo-600 py-6 text-white">
         <nav className="flex flex-col gap-3">
           {ABAS.map(({ id, rotulo, Icone }) => (
             <button key={id} title={rotulo} onClick={() => setAba(id)}
@@ -42,18 +28,12 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <button title="Sair" onClick={() => supabase.auth.signOut()} className="p-3 rounded-2xl hover:bg-indigo-500">
-          <LogOut size={22} />
-        </button>
       </aside>
 
       {/* Conteúdo */}
       <main className="mx-auto max-w-5xl p-4 pb-24 md:p-8">
-        <header className="mb-4 flex items-center justify-between md:hidden">
+        <header className="mb-4 md:hidden">
           <h1 className="text-lg font-semibold text-slate-800">Prestação de Contas</h1>
-          <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-1 text-sm text-slate-500">
-            <LogOut size={16} /> Sair
-          </button>
         </header>
         {aba === 'nova' && <NovaDespesa aoSalvar={() => setAba('lista')} />}
         {aba === 'lista' && <Lancamentos />}
