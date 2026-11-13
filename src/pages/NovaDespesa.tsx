@@ -1,9 +1,9 @@
-import { useState } from 'react'
-import { Camera, Paperclip, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Camera, Loader2, Paperclip, X } from 'lucide-react'
 import { Card, inputCls, btnPrimario } from '../components/ui'
 import { CATEGORIAS, COR_CATEGORIA, type Categoria } from '../lib/types'
 import { hoje } from '../lib/format'
-import { criarDespesa, enviarComprovante } from '../lib/despesas'
+import { criarDespesa, enviarComprovante, prepararArquivo } from '../lib/despesas'
 
 export default function NovaDespesa({ aoSalvar }: { aoSalvar: () => void }) {
   const [data, setData] = useState(hoje())
@@ -11,12 +11,29 @@ export default function NovaDespesa({ aoSalvar }: { aoSalvar: () => void }) {
   const [categoria, setCategoria] = useState<Categoria>('Alimentação')
   const [descricao, setDescricao] = useState('')
   const [arquivo, setArquivo] = useState<File | null>(null)
+  const [preparando, setPreparando] = useState(false) // comprimindo a imagem
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
+  const selecaoAtual = useRef(0) // ignora compressões antigas se outro arquivo for escolhido
 
   // Máscara BRL: digita-se só números, exibe como 1.234,56
   const valorNum = Number(valor || 0) / 100
   const valorTxt = valorNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+
+  // Comprime a imagem assim que é escolhida (PDF segue como está)
+  async function escolherArquivo(original: File | undefined) {
+    if (!original) return
+    const id = ++selecaoAtual.current
+    setPreparando(true)
+    const f = await prepararArquivo(original)
+    if (id !== selecaoAtual.current) return
+    setArquivo(f); setPreparando(false)
+  }
+
+  function removerArquivo() {
+    selecaoAtual.current++
+    setArquivo(null); setPreparando(false)
+  }
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault()
@@ -69,24 +86,31 @@ export default function NovaDespesa({ aoSalvar }: { aoSalvar: () => void }) {
             <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-indigo-50 px-3 py-2 text-sm text-indigo-700">
               <Camera size={18} /> Tirar foto
               <input type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={e => setArquivo(e.target.files?.[0] ?? null)} />
+                onChange={e => { escolherArquivo(e.target.files?.[0]); e.target.value = '' }} />
             </label>
             <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-indigo-50 px-3 py-2 text-sm text-indigo-700">
               <Paperclip size={18} /> Imagem ou PDF
               <input type="file" accept="image/*,application/pdf" className="hidden"
-                onChange={e => setArquivo(e.target.files?.[0] ?? null)} />
+                onChange={e => { escolherArquivo(e.target.files?.[0]); e.target.value = '' }} />
             </label>
           </div>
-          {arquivo && (
+          {preparando && (
+            <p className="mt-2 flex items-center gap-2 text-sm text-indigo-600">
+              <Loader2 size={16} className="animate-spin" /> Preparando o arquivo…
+            </p>
+          )}
+          {!preparando && arquivo && (
             <p className="mt-2 flex items-center gap-2 text-sm text-slate-600">
               <span className="truncate">{arquivo.name}</span>
-              <button type="button" onClick={() => setArquivo(null)} className="text-slate-400" title="Remover anexo"><X size={16} /></button>
+              <button type="button" onClick={removerArquivo} className="text-slate-400" title="Remover anexo"><X size={16} /></button>
             </p>
           )}
         </div>
 
         {erro && <p className="text-sm text-red-600">{erro}</p>}
-        <button className={`${btnPrimario} w-full`} disabled={enviando}>{enviando ? 'Salvando…' : 'Salvar despesa'}</button>
+        <button className={`${btnPrimario} w-full`} disabled={enviando || preparando}>
+          {enviando ? 'Salvando…' : 'Salvar despesa'}
+        </button>
       </form>
     </Card>
   )

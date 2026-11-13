@@ -3,7 +3,8 @@ import { Eye, Trash2 } from 'lucide-react'
 import { Card, inputCls } from '../components/ui'
 import { CATEGORIAS, COR_CATEGORIA, type Despesa } from '../lib/types'
 import { brl, dataBR, mesAtual } from '../lib/format'
-import { buscarPorMes, excluirDespesa, urlComprovante } from '../lib/despesas'
+import { buscarPorMes, excluirDespesa } from '../lib/despesas'
+import ModalComprovante from '../components/ModalComprovante'
 
 export default function Lancamentos() {
   const [mes, setMes] = useState(mesAtual())
@@ -25,13 +26,7 @@ export default function Lancamentos() {
     return () => { ativo = false }
   }, [mes, cat, versao])
 
-  async function ver(d: Despesa) {
-    if (!d.comprovante_url) return
-    // Abre a aba antes do await para o navegador do celular não bloquear o pop-up
-    const aba = window.open('', '_blank')
-    try { const url = await urlComprovante(d.comprovante_url); if (aba) aba.location.href = url }
-    catch { aba?.close(); alert('Não foi possível abrir o comprovante.') }
-  }
+  const [comprovante, setComprovante] = useState<string | null>(null) // path aberto no modal
 
   async function excluir(d: Despesa) {
     if (!confirm(`Excluir "${d.descricao}" (${brl(d.valor)})? Essa ação remove também o anexo.`)) return
@@ -65,12 +60,14 @@ export default function Lancamentos() {
               <p className="truncate text-slate-800">{d.descricao}</p>
             </div>
             <span className="font-semibold text-slate-800">{brl(d.valor)}</span>
-            <button title="Ver NFe" disabled={!d.comprovante_url} onClick={() => ver(d)}
+            <button title="Ver NFe" disabled={!d.comprovante_url} onClick={() => setComprovante(d.comprovante_url)}
               className="p-2 text-indigo-600 disabled:text-slate-300"><Eye size={20} /></button>
             <button title="Excluir" onClick={() => excluir(d)} className="p-2 text-red-500"><Trash2 size={20} /></button>
           </div>
         ))}
       </Card>
+
+      {comprovante && <ModalComprovante path={comprovante} aoFechar={() => setComprovante(null)} />}
     </div>
   )
 }

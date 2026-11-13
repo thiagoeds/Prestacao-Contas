@@ -20,18 +20,27 @@ export const buscarPorMes = (ym: string, categoria?: string) => {
   return buscarDespesas(ini, fim, categoria)
 }
 
-/** Comprime (se imagem) e envia o arquivo; retorna o path salvo no bucket. */
-export async function enviarComprovante(arquivo: File): Promise<string> {
-  let f: File = arquivo
-  if (arquivo.type.startsWith('image/')) {
-    try {
-      f = await imageCompression(arquivo, { maxSizeMB: 1, maxWidthOrHeight: 1280, useWebWorker: true })
-    } catch (e) {
-      // Formatos que o navegador não decodifica (ex.: HEIC) seguem sem compressão
-      console.warn('Falha ao comprimir; enviando original.', e)
-    }
+/**
+ * Prepara o anexo: imagens são comprimidas (máx. 1 MB / 1280 px) e convertidas para JPEG.
+ * PDFs e formatos que o navegador não decodifica (ex.: HEIC) seguem como estão.
+ */
+export async function prepararArquivo(arquivo: File): Promise<File> {
+  if (!arquivo.type.startsWith('image/')) return arquivo
+  try {
+    const blob = await imageCompression(arquivo, {
+      maxSizeMB: 1, maxWidthOrHeight: 1280, useWebWorker: true, fileType: 'image/jpeg',
+    })
+    const nome = arquivo.name.replace(/\.[^.]+$/, '') + '.jpg'
+    return new File([blob], nome, { type: 'image/jpeg' })
+  } catch (e) {
+    console.warn('Falha ao comprimir; usando o original.', e)
+    return arquivo
   }
-  const nome = arquivo.name.replace(/[^\w.\-]/g, '_')
+}
+
+/** Envia o arquivo (já preparado) ao bucket; retorna o path salvo. */
+export async function enviarComprovante(f: File): Promise<string> {
+  const nome = f.name.replace(/[^\w.\-]/g, '_')
   const path = `${Date.now()}-${nome}`
   const { error } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: f.type })
   if (error) throw error
