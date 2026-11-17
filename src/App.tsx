@@ -35,7 +35,7 @@ export default function App() {
         <header className="mb-4 md:hidden">
           <h1 className="text-lg font-semibold text-slate-800">Prestação de Contas</h1>
         </header>
-        {aba === 'nova' && <NovaDespesa aoSalvar={() => setAba('lista')} />}
+        {aba === 'nova' && <NovaDespesa aoVerLancamentos={() => setAba('lista')} />}
         {aba === 'lista' && <Lancamentos />}
         {aba === 'dash' && (
           <Suspense fallback={<p className="p-6 text-center text-slate-400">Carregando…</p>}><Dashboard /></Suspense>
