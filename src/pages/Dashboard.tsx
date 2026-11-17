@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download } from 'lucide-react'
+import { Download, FileText, Loader2 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Card, inputCls, btnPrimario } from '../components/ui'
 import { CATEGORIAS, COR_CATEGORIA, type Despesa } from '../lib/types'
@@ -14,6 +14,18 @@ export default function Dashboard() {
   const [dados, setDados] = useState<Despesa[]>([])
 
   const [erro, setErro] = useState('')
+  const [gerandoPdf, setGerandoPdf] = useState('') // progresso do relatório PDF
+
+  // PDF com resumo, lista e uma página por comprovante (carregado sob demanda)
+  async function baixarPdf() {
+    setGerandoPdf('Preparando…')
+    try {
+      const { exportarPdf } = await import('../lib/relatorioPdf')
+      await exportarPdf(dados, ini, fim, setGerandoPdf)
+    } catch (e) {
+      console.error(e); alert('Erro ao gerar o PDF.')
+    } finally { setGerandoPdf('') }
+  }
 
   useEffect(() => {
     if (!ini || !fim || ini > fim) return // período incompleto ou invertido
@@ -57,10 +69,15 @@ export default function Dashboard() {
       <Card className="flex flex-wrap items-end gap-3">
         <label className="text-sm text-slate-600">De<input type="date" className={inputCls} value={ini} onChange={e => setIni(e.target.value)} /></label>
         <label className="text-sm text-slate-600">Até<input type="date" className={inputCls} value={fim} onChange={e => setFim(e.target.value)} /></label>
-        <button className={`${btnPrimario} ml-auto flex items-center gap-2`} disabled={!dados.length}
-          onClick={() => exportarExcel(dados, `${ini}_a_${fim}`).catch(() => alert('Erro ao gerar o Excel.'))}>
-          <Download size={18} /> Baixar Relatório Excel (.xlsx)
-        </button>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <button className={`${btnPrimario} flex items-center gap-2`} disabled={!dados.length || !!gerandoPdf} onClick={baixarPdf}>
+            {gerandoPdf ? <><Loader2 size={18} className="animate-spin" /> {gerandoPdf}</> : <><FileText size={18} /> Relatório PDF com comprovantes</>}
+          </button>
+          <button className="flex items-center gap-2 rounded-xl border border-indigo-200 px-4 py-2.5 font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50" disabled={!dados.length}
+            onClick={() => exportarExcel(dados, `${ini}_a_${fim}`).catch(() => alert('Erro ao gerar o Excel.'))}>
+            <Download size={18} /> Excel (.xlsx)
+          </button>
+        </div>
         {ini > fim && <p className="w-full text-sm text-red-600">A data inicial deve ser anterior à final.</p>}
         {erro && <p className="w-full text-sm text-red-600">{erro}</p>}
       </Card>

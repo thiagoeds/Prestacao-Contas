@@ -142,7 +142,7 @@ export function categoriaPorCnae(cnae: number | string | undefined): Categoria |
 /* Texto do OCR                                                       */
 /* ------------------------------------------------------------------ */
 
-export type TipoComprovante = 'nfce' | 'nfe' | 'cartao' | 'desconhecido'
+export type TipoComprovante = 'nfce' | 'nfe' | 'pix' | 'cartao' | 'desconhecido'
 
 export interface DadosTexto {
   tipo: TipoComprovante
@@ -151,6 +151,7 @@ export interface DadosTexto {
   cnpj?: string
   chave?: Chave
   categoria?: Categoria
+  recebedor?: string // Pix: nome de quem recebeu
 }
 
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
@@ -184,6 +185,8 @@ function extrairValor(linhas: string[]): number | undefined {
   return comRs.length ? Math.max(...comRs) : undefined
 }
 
+const MESES = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ']
+
 function extrairData(linhas: string[]): string | undefined {
   const hoje = new Date()
   const candidatas: { iso: string; prioridade: number }[] = []
@@ -191,6 +194,12 @@ function extrairData(linhas: string[]): string | undefined {
     for (const m of l.matchAll(/(\d{2})\s?[/.-]\s?(\d{2})\s?[/.-]\s?(\d{4}|\d{2})(?!\d)/g)) {
       const d = Number(m[1]), mes = Number(m[2])
       const a = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])
+      if (a < 2015 || !dataValida(a, mes, d) || new Date(a, mes - 1, d) > hoje) continue
+      candidatas.push({ iso: iso(a, mes, d), prioridade: /EMISS|DATA/.test(l) ? 0 : 1 })
+    }
+    // Mês por extenso (comum em comprovantes de Pix): 17 NOV 2026 | 17 de novembro de 2026 | 17/nov/2026
+    for (const m of l.matchAll(/\b(\d{1,2})\s*(?:DE\s+|[/.-]\s*)?(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)[A-Z]*\.?\s*(?:DE\s+|[/.-]\s*)?(\d{4})\b/g)) {
+      const d = Number(m[1]), mes = MESES.indexOf(m[2]) + 1, a = Number(m[3])
       if (a < 2015 || !dataValida(a, mes, d) || new Date(a, mes - 1, d) > hoje) continue
       candidatas.push({ iso: iso(a, mes, d), prioridade: /EMISS|DATA/.test(l) ? 0 : 1 })
     }
@@ -234,14 +243,44 @@ export function interpretarTexto(textoOriginal: string): DadosTexto {
   let tipo: TipoComprovante = 'desconhecido'
   if (/NFC-?E|CONSUMIDOR ELETRONICA|NOTA FISCAL DE CONSUMIDOR/.test(t)) tipo = 'nfce'
   else if (/DANFE|NOTA FISCAL ELETRONICA/.test(t)) tipo = 'nfe'
+  else if (/\bPIX\b|ID DA TRANSACAO|\bE2E\b|END TO END|CHAVE ALEATORIA/.test(t)) tipo = 'pix'
   else if (/VIA (DO )?CLIENTE|VIA CLIENTE|\bAUT(ORIZACAO)?\b|CREDITO|DEBITO|\bDOC\b|\bNSU\b/.test(t)) tipo = 'cartao'
+
+  // No Pix o comprovante traz quem recebeu e quem pagou: prioriza o bloco do recebedor
+  const rec = tipo === 'pix' ? blocoRecebedor(linhas) : undefined
 
   return {
     tipo,
     valor: extrairValor(linhas),
     data: extrairData(linhas),
-    cnpj: extrairCnpj(t),
+    cnpj: (rec && extrairCnpj(rec.texto)) || extrairCnpj(t),
     chave: extrairChave(linhas),
-    categoria: categoriaPorPalavras(t),
+    categoria: categoriaPorPalavras(rec?.texto ?? t) ?? categoriaPorPalavras(t),
+    recebedor: rec?.nome,
   }
+}
+
+const RE_RECEBEDOR = /^(DESTINO|PARA\b|RECEBEDOR|FAVORECIDO|DADOS DO RECEBEDOR|DADOS DO FAVORECIDO|QUEM RECEBEU|BENEFICIARIO)/
+const RE_PAGADOR = /^(ORIGEM|DE\b|PAGADOR|DADOS DO PAGADOR|QUEM PAGOU|REMETENTE|DADOS DE QUEM PAGOU)/
+const RE_ROTULO = /^(NOME|CPF|CNPJ|INSTITUICAO|BANCO|AGENCIA|CONTA|CHAVE|TIPO|ID|VALOR|DATA)\b/
+
+/** Trecho do comprovante de Pix entre o rótulo do recebedor e o do pagador, e o nome do recebedor. */
+function blocoRecebedor(linhas: string[]): { texto: string; nome?: string } | undefined {
+  const ini = linhas.findIndex(l => RE_RECEBEDOR.test(l))
+  if (ini < 0) return
+  let fim = linhas.findIndex((l, i) => i > ini && RE_PAGADOR.test(l))
+  if (fim < 0) fim = linhas.length
+  const bloco = linhas.slice(ini, fim)
+
+  let nome: string | undefined
+  const naMesmaLinha = bloco[0].replace(RE_RECEBEDOR, '').replace(/^[\s:–-]+/, '').trim() // "Para: Fulano"
+  if (naMesmaLinha.length > 2 && !RE_ROTULO.test(naMesmaLinha)) nome = naMesmaLinha
+  if (!nome) {
+    const iNome = bloco.findIndex(l => /^NOME\b/.test(l))
+    const resto = iNome >= 0 ? bloco[iNome].replace(/^NOME\s*:?\s*/, '').trim() : ''
+    nome = resto.length > 2 ? resto
+      : iNome >= 0 ? bloco[iNome + 1]
+      : bloco.slice(1).find(l => !RE_ROTULO.test(l) && /[A-Z]{3}/.test(l) && !/\d{3}/.test(l))
+  }
+  return { texto: bloco.join('\n'), nome: nome?.trim() || undefined }
 }

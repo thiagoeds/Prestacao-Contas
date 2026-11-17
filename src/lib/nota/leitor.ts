@@ -159,6 +159,7 @@ export async function analisarComprovante(arquivo: File, aoProgredir?: (etapa: s
   // 2) OCR do texto (só se ainda faltar valor ou data)
   let cnpjTexto: string | undefined
   let categoriaTexto: Categoria | undefined
+  let recebedor: string | undefined
   if (!res.valor || !res.data) {
     aoProgredir?.('Lendo o texto da foto…')
     try {
@@ -173,6 +174,7 @@ export async function analisarComprovante(arquivo: File, aoProgredir?: (etapa: s
       }
       cnpjTexto = t.cnpj
       categoriaTexto = t.categoria
+      recebedor = t.recebedor
     } catch (e) {
       console.warn('OCR falhou', e)
     }
@@ -187,9 +189,12 @@ export async function analisarComprovante(arquivo: File, aoProgredir?: (etapa: s
     if (emp?.categoria) res.categoria = { valor: emp.categoria, origem: 'cnpj' }
   }
   if (!res.categoria && categoriaTexto) res.categoria = { valor: categoriaTexto, origem: 'foto' }
+  if (!res.estabelecimento && recebedor) res.estabelecimento = { valor: titulo(recebedor), origem: 'foto' }
 
   // Avisos para o usuário
-  if (!res.qrLido && (res.tipo === 'cartao' || res.tipo === 'desconhecido'))
+  if (res.tipo === 'pix')
+    res.aviso = 'Comprovante de Pix não é documento fiscal. Confira os dados e, se possível, anexe também a nota.'
+  else if (!res.qrLido && (res.tipo === 'cartao' || res.tipo === 'desconhecido'))
     res.aviso = 'Comprovante sem QR Code fiscal. Confira os dados preenchidos ou fotografe a nota fiscal.'
   else if (!res.qrLido)
     res.aviso = 'Não consegui ler o QR Code. Os dados foram lidos do texto da foto — confira antes de salvar.'

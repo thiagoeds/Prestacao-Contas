@@ -5,7 +5,10 @@ import { dataBR } from './format'
 export async function exportarExcel(despesas: Despesa[], periodo: string) {
   // Carrega a SheetJS só quando o botão é clicado (deixa o app inicial mais leve)
   const XLSX = await import('xlsx')
-  const linhas = despesas.map(d => ({
+  // Mesma ordem e numeração do relatório PDF (nº = página do comprovante)
+  const ordenadas = [...despesas].sort((a, b) => a.data_despesa.localeCompare(b.data_despesa) || a.created_at.localeCompare(b.created_at))
+  const linhas = ordenadas.map((d, i) => ({
+    'Nº': i + 1,
     Data: dataBR(d.data_despesa),
     Categoria: d.categoria,
     Descrição: d.descricao,
@@ -13,9 +16,9 @@ export async function exportarExcel(despesas: Despesa[], periodo: string) {
     'Status do Anexo': d.comprovante_url ? 'Com Anexo' : 'Sem Anexo',
   }))
   const ws1 = XLSX.utils.json_to_sheet(linhas)
-  ws1['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 45 }, { wch: 14 }, { wch: 16 }]
-  // Formata a coluna Valor (D) como moeda
-  for (let r = 2; r <= linhas.length + 1; r++) if (ws1[`D${r}`]) ws1[`D${r}`].z = '"R$" #,##0.00'
+  ws1['!cols'] = [{ wch: 5 }, { wch: 12 }, { wch: 18 }, { wch: 45 }, { wch: 14 }, { wch: 16 }]
+  // Formata a coluna Valor (E) como moeda
+  for (let r = 2; r <= linhas.length + 1; r++) if (ws1[`E${r}`]) ws1[`E${r}`].z = '"R$" #,##0.00'
 
   const resumo = CATEGORIAS.map(c => ({
     Categoria: c as string,

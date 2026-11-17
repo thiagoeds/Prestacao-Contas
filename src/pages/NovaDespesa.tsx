@@ -22,7 +22,7 @@ function Selo({ origem }: { origem?: Origem }) {
   )
 }
 
-const NOME_TIPO = { nfce: 'NFC-e', nfe: 'NF-e', cartao: 'Comprovante de cartão', desconhecido: 'Comprovante' }
+const NOME_TIPO = { nfce: 'NFC-e', nfe: 'NF-e', pix: 'Comprovante de Pix', cartao: 'Comprovante de cartão', desconhecido: 'Comprovante' }
 
 export default function NovaDespesa({ aoVerLancamentos }: { aoVerLancamentos: () => void }) {
   const [etapa, setEtapa] = useState<Etapa>('captura')
